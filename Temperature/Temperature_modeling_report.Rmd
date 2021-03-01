@@ -1,0 +1,58 @@
+---
+title: "Temperature modeling for aquaculture"
+author: "PURA acuicultura"
+date: "2/24/2021"
+output: html_document
+---
+
+```{r T_setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Being ectothermic, fish are subject to the external temperature fluctuations of the environments in which they live. Variance exists in both temperature tolerance and temperature optima among fish species. At the temperature optima for a given species, growth potential is maximal. Appetite, which also varies with temperature, is also maximal at the temperature optima. Away from the temperature optima, both feeding and growth are reduced though not necessarily to the same extent in relation to whether temperatures are above or below the optima.
+
+The dependence of growth on temperature make it an integral part of nearly all fish growth models. Temperature varies diurnally, annually, and over multi-year cycles. Although diurnal fluctuations are integral to many aspects of practical aquaculture management, they will be ignored here given that their contribution to the daily cumulative growth model we are developing is negligible. Annual variation in temperature is a result of seasonal differences. As such, tropical conditions (NB: Tilapia) generally experience lower annual variation in temperature than temperate regions (NB: Salmon). Multi-year variation in temperature arises through both known and unknown sources. Variable length climatic oscillations like 'El nino' is a naturally occurring example, global warming is an example of an anthropogenic source of multi-year temperature variance.
+
+The development of temperature models for fish growth modeling is discussed here. Specific focus is on generating modeling frameworks that can be easily adjusted to the varying geographies over which aquaculture is practiced. 
+
+```{r T_libraries, warning = FALSE, message = FALSE, error = FALSE}
+library(tidyverse)
+
+```
+
+## Annual variation
+
+The temperature models developed here are conceptually different than the cumulative daily growth model developed earlier. If we remember, the growth model started with actual fish growth results and then used mathematics to describe the relationships between time and fish weight. Here, we work in the opposite order and start by using mathematics and finish with 'modeled' temperature profiles for typical aquaculture environments. The process is similar but subtly different. For example, while experimental results previously dictated the independent factors of our growth model, for our temperature models we have the freedom to select the independent factors most suited to our modeling goals. In fact, selecting these factors is the most logical place to start.
+
+```{r T_ind_factors, echo = TRUE}
+date_ini <- as.Date("2010-01-01")
+date_fin <- as.Date("2020-12-31")
+temp_mean <- 25
+temp_var <- 2
+```
+
+```{r T_dataframe, echo = TRUE}
+DATE <- seq(date_ini, date_fin, by = 1)
+DAY <- 1:length(DATE)
+df_temp <- data.frame(DATE, DAY)
+```
+
+```{r T_graph_1, echo = TRUE}
+df_temp %>%
+  mutate(DAY_rad = -1 * DAY / 365.25 * 2 * pi) %>%
+  mutate(TEMP = temp_mean + temp_var * sin(DAY_rad)) %>%
+  ggplot(aes(x = DATE, y = TEMP)) +
+  geom_line(color = "blue", size = 1) +
+  scale_y_continuous(limits = c(0, 30)) +
+  scale_x_date(date_breaks = "1 year",
+               date_labels = "%b-%y") +
+  xlab("") +
+  ylab("temperature (C)") +
+  theme_bw(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 90,
+                                   vjust = 0.5,
+                                   hjust = 1))
+```
+

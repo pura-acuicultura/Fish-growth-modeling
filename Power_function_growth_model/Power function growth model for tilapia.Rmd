@@ -1,0 +1,191 @@
+---
+title: "Power function growth model for tilapia"
+author: "PURA acuicultura"
+date: "2/28/2021"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Previously we fit and power function growth model to experimental data concerning the growth of tilapia as a function of time. Here we take the estimates from that exercise and apply them to predictive models incorporating factors such as temperature and feeding. We also expand from singular models of individual fish to complex populations composed of inter-related families. Load the following libraries to get started.
+
+```{r pfg_libraries, warning = FALSE, message = FALSE, error = FALSE}
+library(tidyverse)
+library(gridExtra)
+```
+
+## Generating some data
+
+We can start by generating some data describing weight as a function of time. The code below starts by making a sequence of 365 days and predicting weight using a power function and the a and b parameters defined previously. Time and weight are then added to a data frame and a simple plot arranged.
+
+```{r pfg_starting_model, echo = TRUE, fig.dim = c(5, 3)}
+
+a <- 0.00000092145
+b <- 3.43456
+
+day <- seq(1, 356, 1)
+weight <- a*day^b
+df <- data.frame(day, weight)
+
+df %>% ggplot() +
+  geom_point(aes(x = day, y = weight), color = "blue") +
+  theme_bw()
+
+```
+
+## Preliminary thoughs on the addition of 'error'
+
+Our initial curve is perfect, too perfect in fact. We could simply add some error here but this is not really appropriate for a growth model. The following code adds a bit of random error to the curve and produces a plot. This type of error would be fine for models such as temperature as a function of time. For a growth model then, what is the problem?
+
+```{r pfg_error_1, echo = TRUE, fig.dim = c(5, 3)}
+
+df %>% 
+  mutate(error = rnorm(356, 0, 5)) %>%
+  mutate(weight_2 = weight + error) %>%
+  ggplot() +
+  geom_point(aes(x = day, y = weight_2), color = "blue") +
+  theme_bw()
+
+```
+
+One aspect of growth models that make them different from other time series is that weight losses are not generally of the same magnitude as weight gains. In fact, if this were not true, the organism would not actually be 'growing'. In our growth model, we need to remember that daily weight accumulates from one day to the next. This accumulation of weight creates a second problem for the constant error term we just added. Relative to their weight, small fish exhibit large errors in weight and large fish small error. This is definitely not a good model. To fix both of these problems we need to hold off  on adding error here and convert our model to a more dynamic cumulative growth function.
+
+## Re-parameterization for cumulative growth modeling
+
+Our current model can only account for 'lifetime' effects through the exponent 'b'. In fact, our attempt to add error in the preceding section failed because the magnitude varies on a finer scale. Here we will re-parameterize our existing data to produce a model that can account for 'daily' effects. This will not only be useful for error, but any parameter that varies from day-to-day. For example, while feeding and temperature can be modeled with 'lifetime' means and/or sums, a model accounting for day-to-day variation in these variables will be significantly more dynamic.
+
+As input, our cumulative growth model takes an initial weight at the start of the day, uses the initial weight to predict weight gain for the day, and then adds weight gain to the initial weight to predict the initial weight of the following day. To create the model we need to re-parameterize our data as 'weight gain as a function of fish weight'. The result is the same as a Gulland-Holt plot, but in units of weight instead of length (NB: this is an interesting discussion in itself).
+
+The following script updates our data frame with the new parameters through the `mutate()` function. First, the 'change in weight' between successive days is calculated as `delta_w`. The `lag()` function is extremely useful in this operation. For each observation (NB: row), weight is subtracted by the weight of the observation that 'lags' a specified number of observations (NB: 1 in this case) above it. You can imagine that the first operation results in an NA because it lacks lagging observations. Here we simply drop the first row using the `drop_na` function. After 'change in weight', 'change in day' is calculated in the same way and given the name `delta_d`. For this model the calculation is really just for consistency given 'change in day' will be 1 for all cases, but the calculation can become useful for other instances. Next, 'weight gain' is calculated as `delta_w` divided by `delta_d` and given the name `delta_g`. As a final step, the average weight of each successive day interval is calculated and given the name `weight_a`.
+
+With all the new parameters written into the data frame, a plot of 'weight gain' ans a function of average weight is produced.
+
+```{r pfg_reparam, fig.dim = c(5, 3)}
+
+df <- df %>%
+  mutate(delta_w = weight - lag(weight, 1)) %>%
+  mutate(delta_d = day - lag(day, 1)) %>%
+  mutate(delta_g = delta_w / delta_d) %>%
+  mutate(weight_a = (weight + lag(weight, 1))/2) %>%
+  drop_na()
+
+df %>% ggplot() +
+  geom_point(aes(x = weight_a, y = delta_g), color = 'blue') +
+  labs(title = "weight gain as a function of weight") +
+  labs(x = "weight (g)",
+       y = "weight gain (grams/day)") +
+  theme_bw()
+
+```
+
+## Fit the re-parameterized model
+
+```{r pfg_fit, fig.dim = c(5, 3)}
+
+fit <- lm(log(delta_w) ~ log(weight_a), data = df)
+coef(fit)
+
+cwg <- function(w_init){
+          exp(-2.818561 + 0.7104807 * log(w_init))
+          }
+
+x <- seq(0, 500, by = 1)
+y <- as.array(sapply(x, FUN = cwg))
+df_1 <- data.frame(x, y)
+
+df_1 %>%
+  ggplot() +
+  geom_point(aes(x = x, y = y), color = 'blue') +
+  theme_bw()
+
+```
+
+## Re-create original model using cumulative growth function
+
+```{r pfg_cgm, fig.dim = c(5, 3) }
+
+dog <- 356
+
+w_cum <- vector(length = dog)
+w_cum[1] <- a*1^b
+
+for(i in 1:dog){
+  w_cum[i+1] <- w_cum[i] + cwg(w_cum[i])
+}
+
+x <- 1:dog
+y <- w_cum[-357]
+df_2 <- data.frame(x, y)
+
+df_2 %>%
+  ggplot() +
+  geom_point(aes(x = x, y = y), color = 'blue') +
+  theme_bw()
+
+```
+
+## Add error to the cumulative growth function
+
+```{r pfg_cgm_error, fig.dim = c(5, 3)}
+
+pop <- function(){
+  dog <- 356
+  w_cum <- vector(length = dog)
+  w_cum[1] <- a*1^b
+  
+  for(i in 1:dog){
+    w_cum[i+1] <- w_cum[i] + cwg(w_cum[i]) * rnorm(1, 1, 0.4)
+  }
+  w_cum[-357]
+}
+
+df_2 <- data.frame(x = 1:356, y = pop())
+
+df_2 %>%
+  ggplot() +
+  geom_point(aes(x = x, y = y), color = 'blue') +
+  ylim(c(0, 500)) +
+  theme_bw()
+
+```
+
+## Error leads to individualization
+
+```{r, fig.dim = c(10, 3), warning = FALSE, message = FALSE, error = FALSE}
+n_pop <- 200
+
+day <- rep(1:356)
+weight <- replicate(n_pop, pop())
+df_pop <- data.frame(cbind(day, weight))
+colnames(df_pop) <- c("day", 1:n_pop)
+
+GC <- df_pop %>%
+  gather(key = "fish_id", value = "weight", -day) %>%
+  mutate(fish_id = factor(fish_id, levels = as.character(1:n_pop))) %>%
+  ggplot() +
+  geom_line(aes(x = day, y = weight, color = fish_id)) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+HIST <- df_pop %>%
+  gather(key = "fish_id", value = "weight", -day) %>%
+  mutate(fish_id = factor(fish_id, levels = as.character(1:n_pop))) %>%
+  filter(day == 300) %>%
+  ggplot() +
+  geom_histogram(aes(weight), bin.width = 10, fill = 'blue') +
+  xlim(c(150, 400)) +
+  theme_bw()
+
+grid.arrange(GC, HIST, nrow = 1)
+```
+
+## Performance can be manipulated through the same process
+
+```{r}
+
+```
+
