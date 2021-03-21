@@ -1,10 +1,7 @@
 ##### Power function growth model #####
 
 library(tidyverse)
-library(nlme)
-library(lme4)
-library(broom)
-library(reshape2)
+library(gridExtra)
 
 # 1. INTRODUCTION #####
 #___1. A simple model to start with ####
@@ -83,18 +80,18 @@ df_2 %>%
 
 # 4. ADD ERROR IN THE CONTEXT OF GROWTH #####
 
-
-dog <- 356
-w_cum <- vector(length = dog)
-w_cum[1] <- a*1^b
-
-for(i in 1:dog){
-  w_cum[i+1] <- w_cum[i] + cwg(w_cum[i]) * rnorm(1, 1, 0.5)
+pop <- function(){
+  dog <- 356
+  w_cum <- vector(length = dog)
+  w_cum[1] <- a*1^b
+  
+  for(i in 1:dog){
+    w_cum[i+1] <- w_cum[i] + cwg(w_cum[i]) * rnorm(1, 1, 0.4)
+  }
+  w_cum[-357]
 }
 
-x <- 1:dog
-y <- w_cum[-357]
-df_2 <- data.frame(x, y)
+df_2 <- data.frame(x = 1:356, y = pop())
 
 df_2 %>%
   ggplot() +
@@ -104,17 +101,6 @@ df_2 %>%
 
 # 5. CREATE A POPULATION OF INDIVIDUALS THROUGH RANDOM ERROR #####
 
-pop <- function(){
-          dog <- 356
-          w_cum <- vector(length = dog)
-          w_cum[1] <- a*1^b
-          
-          for(i in 1:dog){
-            w_cum[i+1] <- w_cum[i] + cwg(w_cum[i]) * rnorm(1, 1, 0.4)
-          }
-          w_cum[-357]
-                  }
-
 n_pop <- 200
 
 day <- rep(1:356)
@@ -122,7 +108,7 @@ weight <- replicate(n_pop, pop())
 df_pop <- data.frame(cbind(day, weight))
 colnames(df_pop) <- c("day", 1:n_pop)
 
-df_pop %>%
+GC <- df_pop %>%
   gather(key = "fish_id", value = "weight", -day) %>%
   mutate(fish_id = factor(fish_id, levels = as.character(1:n_pop))) %>%
   ggplot() +
@@ -130,11 +116,13 @@ df_pop %>%
   theme_bw() +
   theme(legend.position = "none")
 
-df_pop %>%
+HIST <- df_pop %>%
   gather(key = "fish_id", value = "weight", -day) %>%
   mutate(fish_id = factor(fish_id, levels = as.character(1:n_pop))) %>%
   filter(day == 300) %>%
   ggplot() +
-  geom_histogram(aes(weight), bins = n_pop/15, fill = 'blue') +
+  geom_histogram(aes(weight), bin.width = 10, fill = 'blue') +
+  xlim(c(150, 400)) +
   theme_bw()
 
+grid.arrange(GC, HIST, nrow = 1)

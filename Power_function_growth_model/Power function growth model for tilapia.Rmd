@@ -37,7 +37,7 @@ df %>% ggplot() +
 
 ```
 
-## Preliminary thoughs on the addition of 'error'
+## Preliminary thoughts on the addition of 'error'
 
 Our initial curve is perfect, too perfect in fact. We could simply add some error here but this is not really appropriate for a growth model. The following code adds a bit of random error to the curve and produces a plot. This type of error would be fine for models such as temperature as a function of time. For a growth model then, what is the problem?
 
@@ -62,7 +62,7 @@ As input, our cumulative growth model takes an initial weight at the start of th
 
 The following script updates our data frame with the new parameters through the `mutate()` function. First, the 'change in weight' between successive days is calculated as `delta_w`. The `lag()` function is extremely useful in this operation. For each observation (NB: row), weight is subtracted by the weight of the observation that 'lags' a specified number of observations (NB: 1 in this case) above it. You can imagine that the first operation results in an NA because it lacks lagging observations. Here we simply drop the first row using the `drop_na` function. After 'change in weight', 'change in day' is calculated in the same way and given the name `delta_d`. For this model the calculation is really just for consistency given 'change in day' will be 1 for all cases, but the calculation can become useful for other instances. Next, 'weight gain' is calculated as `delta_w` divided by `delta_d` and given the name `delta_g`. As a final step, the average weight of each successive day interval is calculated and given the name `weight_a`.
 
-With all the new parameters written into the data frame, a plot of 'weight gain' ans a function of average weight is produced.
+With all the new parameters written into the data frame, a plot of 'weight gain as a function of average weight' is produced.
 
 ```{r pfg_reparam, fig.dim = c(5, 3)}
 
@@ -82,7 +82,11 @@ df %>% ggplot() +
 
 ```
 
-## Fit the re-parameterized model
+The re-parameterized plot is very different from the one we started with. We can see that 'weight gain' increases with average weight in a curvi-linear manner. When measures of length are used to make a Gulland-Holt plot the resulting relationship is linear, and as such, extremely useful in estimating growth parameters and size maximums. Working with weights is not as straight forward, but we can fit a slightly more complex model to our data nonetheless. 
+
+## Fit a model to the re-parameterized data
+
+In the following code we fit a linear model to our re-parameterized data by performing a log transformation of both 'weight gain' and 'average weight'. From the coefficients we then make a function called `dwg()` that takes 'initial weight' as an input and returns 'daily weight gain'. To test the function we make an array of initial weights from 0 to 500 and use `sapply()` to determine 'daily weight gain' for each initial weight using `dwg()`. By graphing our results for daily weight gain against the array of initial weights we reproduce the preceding plot from which the model was developed. This is simply verification that we did everything correctly.     
 
 ```{r pfg_fit, fig.dim = c(5, 3)}
 
@@ -104,7 +108,15 @@ df_1 %>%
 
 ```
 
-## Re-create original model using cumulative growth function
+## Re-create the power function model using a cumulative growth function
+
+We are now going to apply the `dwg()` function sequentially to all the days in a year. We will start with the day 1 weight from out power function model, apply the `dwg()` function, and add 'daily weight gain' to the 'initial weight' to determine the 'initial weight' for the following day. The entire process will then get repeated 356 times. If our equations are correct, we will reproduce the 'weight as a function of day' relationship of the original power function. 
+
+This 'cumulative growth function' will be accomplished using a `for loop`. Creating a `for loop` in R is pretty straightforward process though generally avoided when an `apply()` family function can be used. I have personally never been able to apply other functions aside from `for loops` when 'iterating', as we are doing here. Nonetheless, I am sure someone has worked out a more efficient way to do this. 
+
+Before starting a `for loop` we need to define a location and format in which the results of the loop will be stored. The following code accomplishes this by first defining our 'days of growth' as `dog` and then making an empty vector the same length as `dog`. We call the vector 'cumulative weight' or `w_cum` for short. We then add the day 1 weight from out power function model to the first position of the array. Defining the for loop is now quite simple. The loop runs from 1 to `dog`, or 1 to 356 iterations in this case. At each iteration, the `w_cum` array is queried for the iteration number to return the initial weight. The initial weight is then added to the `dwg()` result of the initial weight and added to the `w_cum` one positioned advanced of the iteration number. The loop continues until all iterations have been performed.      
+
+To verify the operation of our 'cumulative growth function' we can plot the results of `for loop` as a function of the days from 1 to 356. We have to trim an iteration off the end to get everything to line up right but the results are identical to our original power function. In fact, identical to the point that you may wonder what we have accomplished in all this work? Don't worry, it should start to become clear in the next section. 
 
 ```{r pfg_cgm, fig.dim = c(5, 3) }
 
